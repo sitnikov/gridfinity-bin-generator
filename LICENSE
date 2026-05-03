@@ -1,0 +1,52 @@
+SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
+Gridfinity Bin Generator (web)
+==============================
+
+This project is a derivative work — a Python/Flask port of
+"Parametric Gridfinity Ultra Light Bins" by HuMa_Meng — and is
+released under the same license as the original SCAD source:
+
+    Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+    (CC BY-NC-SA 4.0)
+
+You are free to:
+  * Share — copy and redistribute the material in any medium or format
+  * Adapt — remix, transform, and build upon the material
+
+Under the following terms:
+  * Attribution — You must give appropriate credit, provide a link to
+    the license, and indicate if changes were made.
+  * NonCommercial — You may not use the material for commercial purposes.
+  * ShareAlike — If you remix, transform, or build upon the material,
+    you must distribute your contributions under the same license as
+    the original.
+
+Full license text:
+  https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+Human-readable summary:
+  https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+----------------------------------------------------------------------
+Attribution
+----------------------------------------------------------------------
+
+Original SCAD model (geometry source of truth):
+  "Parametric Gridfinity Ultra Light Bins"
+  Copyright (c) 2024 HuMa_Meng
+  https://www.printables.com/model/925520-gridfinity-ultra-light-bin-generator
+  https://makerworld.com/en/@huma_meng
+  License: CC BY-NC-SA 4.0
+
+Gridfinity Specification (used for verification only — not for redistribution):
+  Copyright (c) grizzie17
+  https://www.printables.com/model/417152-gridfinity-specification
+  License: MIT
+
+Gridfinity itself is a 3D-printable storage system created by Zack Freedman
+(licensed CC BY 4.0).
+
+This port (Python/Flask/Three.js) and any accompanying files are
+copyright (c) 2024–2026 the contributors and licensed under
+CC BY-NC-SA 4.0, in compliance with the ShareAlike clause of the
+upstream SCAD source.

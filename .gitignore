@@ -1,0 +1,19 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Reference STLs are NOT bundled — see README. Download separately into:
+gridfinity-lite-economical-plain-storage-bins-model_files/
+
+# Local test outputs / scratch
+test/
+
+# Editor backups
+*.bak
+*~
+*_copy.scad

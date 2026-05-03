@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gridfinity Bin Generator</title>
+<style>
+  :root {
+    --bg: #1c1f24;
+    --panel: #262a31;
+    --panel-2: #2f343c;
+    --border: #3a4049;
+    --text: #e6e8eb;
+    --muted: #8a93a0;
+    --accent: #4aa3ff;
+    --danger: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  #topbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 8px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+  }
+  #topbar h1 { margin: 0; white-space: nowrap; }
+  #topbar .actions { display: flex; gap: 8px; margin: 0; flex: 0 0 auto; }
+  #main { flex: 1; display: flex; min-height: 0; }
+  #sidebar {
+    width: 320px; min-width: 320px; height: 100%; overflow-y: auto;
+    padding: 16px; background: var(--panel); border-right: 1px solid var(--border);
+  }
+  #viewer-wrap { flex: 1; position: relative; height: 100%; }
+  #viewer { width: 100%; height: 100%; display: block; }
+  h1 { font-size: 16px; margin: 0 0 12px; }
+  fieldset {
+    border: 1px solid var(--border); border-radius: 6px;
+    margin: 0 0 12px; padding: 10px 12px 12px;
+    background: var(--panel-2);
+  }
+  legend { padding: 0 6px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; }
+  .row label { flex: 1; font-size: 13px; }
+  .row input[type="number"] { width: 80px; padding: 4px 6px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+  .row input[type="number"]:focus { outline: 1px solid var(--accent); }
+  .row select { padding: 4px 6px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+  .row input[type="checkbox"] { accent-color: var(--accent); transform: scale(1.1); }
+  button {
+    padding: 6px 12px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text); border-radius: 4px;
+    cursor: pointer; font: inherit;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:hover { filter: brightness(1.15); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  #status {
+    flex: 1; min-width: 0; font-size: 12px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #status.error { color: var(--danger); }
+  #spinner {
+    position: absolute; top: 12px; right: 12px;
+    background: rgba(0,0,0,0.65); color: #fff; padding: 8px 12px;
+    border-radius: 6px; font-size: 12px; display: none;
+    align-items: center; gap: 10px;
+  }
+  #spinner.show { display: inline-flex; }
+  .dot-spin {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.25);
+    border-top-color: #fff;
+    animation: dot-spin 0.7s linear infinite;
+  }
+  @keyframes dot-spin { to { transform: rotate(360deg); } }
+  /* small inline spinner next to status text */
+  .inline-spin {
+    display: inline-block; width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 2px solid rgba(74,163,255,0.25);
+    border-top-color: var(--accent);
+    animation: dot-spin 0.7s linear infinite;
+    vertical-align: -1px; margin-right: 6px;
+  }
+  /* gentle live tint on the viewer while generating */
+  #viewer-wrap.busy::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(74,163,255,0.06), rgba(74,163,255,0));
+    pointer-events: none;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+  .help { font-size: 11px; color: var(--muted); margin-left: 4px; }
+  .group-toggle { user-select: none; }
+  .disabled-group { opacity: .45; pointer-events: none; }
+  .disabled-group .group-toggle { pointer-events: auto; opacity: 1; }
+  #viewer-info {
+    position: absolute; bottom: 8px; left: 12px;
+    color: var(--muted); font-size: 11px; pointer-events: none;
+  }
+  /* Help button (round icon) and modal */
+  button.icon {
+    width: 30px; height: 30px; padding: 0; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 600; line-height: 1;
+  }
+  #help-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: none; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  #help-overlay.show { display: flex; }
+  #help-modal {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px;
+    width: min(720px, 92vw); max-height: 86vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  #help-modal header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 18px; border-bottom: 1px solid var(--border);
+  }
+  #help-modal header h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  #help-modal .body {
+    padding: 14px 22px 18px;
+    overflow-y: auto;
+    line-height: 1.55;
+    font-size: 13px;
+  }
+  #help-modal h3 {
+    margin: 16px 0 6px; font-size: 13px; color: var(--accent);
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  #help-modal h3:first-child { margin-top: 0; }
+  #help-modal p { margin: 6px 0; color: var(--text); }
+  #help-modal dl { margin: 4px 0 8px 0; }
+  #help-modal dt {
+    font-weight: 600; color: var(--text); margin-top: 6px;
+  }
+  #help-modal dd {
+    margin: 1px 0 4px 0; color: var(--muted);
+  }
+  #help-modal code {
+    font-family: ui-monospace, Menlo, Monaco, "SF Mono", monospace;
+    font-size: 12px; padding: 1px 5px; border-radius: 3px;
+    background: var(--bg); color: var(--text);
+  }
+  #help-modal kbd {
+    font-family: inherit; font-size: 11px;
+    padding: 1px 5px; border-radius: 3px;
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+<header id="topbar">
+  <h1>Gridfinity Bin Generator</h1>
+  <div id="status">Ready.</div>
+  <div class="actions">
+    <button type="button" id="btn-reset">Reset</button>
+    <button type="button" id="btn-export-config">Export config</button>
+    <button type="button" id="btn-import-config">Import config</button>
+    <button type="button" id="btn-preview" class="primary">Update preview</button>
+    <button type="button" id="btn-download">Download STL</button>
+    <button type="button" id="btn-help" class="icon" title="Help" aria-label="Help">?</button>
+    <input type="file" id="file-import" accept="application/json,.json" hidden>
+  </div>
+</header>
+
+<div id="help-overlay" role="dialog" aria-modal="true" aria-labelledby="help-title">
+  <div id="help-modal">
+    <header>
+      <h2 id="help-title">Gridfinity Bin Generator — Help</h2>
+      <button type="button" id="btn-help-close" class="icon" aria-label="Close">×</button>
+    </header>
+    <div class="body">
+      <h3>How to use</h3>
+      <p>Edit the parameters in the left sidebar — the preview is regenerated automatically (~150&nbsp;ms debounce). Viewer mouse controls: left = rotate, wheel = zoom, right = pan.</p>
+      <p>Top-bar buttons:</p>
+      <dl>
+        <dt><code>Reset</code></dt><dd>Restore all fields to their defaults and clear the saved settings.</dd>
+        <dt><code>Export config</code></dt><dd>Download a JSON file with the current parameters. The filename encodes the dimensions and enabled features.</dd>
+        <dt><code>Import config</code></dt><dd>Load a previously exported JSON (or one prepared by hand). Unknown keys are ignored.</dd>
+        <dt><code>Update preview</code></dt><dd>Force-regenerate the preview (rarely needed — it updates automatically).</dd>
+        <dt><code>Download STL</code></dt><dd>Download the generated STL ready for printing. Same filename scheme as Export config but with the <code>.stl</code> extension.</dd>
+      </dl>
+      <p>The most recently used settings are saved in the browser automatically and restored next time you open the page.</p>
+
+      <h3>Grid size — bin dimensions</h3>
+      <dl>
+        <dt>Grids X / Y</dt>
+        <dd>Footprint of the bin in Gridfinity units (1 unit = 42&nbsp;mm). Half-units are supported in 0.5 steps — e.g. <code>1.5×1</code> produces a 63-mm-wide bin.</dd>
+        <dt>Grids Z</dt>
+        <dd>Height in Z-units (1 Z-unit = 7&nbsp;mm). Integer from 1 to 25.</dd>
+      </dl>
+
+      <h3>Half grid — placement of the leftover half</h3>
+      <p>Only relevant when <code>Grids X</code> or <code>Grids Y</code> is fractional.</p>
+      <dl>
+        <dt>Half grid on right</dt>
+        <dd>Where the extra half-cell sits along X: ON&nbsp;= right, OFF&nbsp;= left.</dd>
+        <dt>Half grid on top</dt>
+        <dd>Same along Y: ON&nbsp;= top, OFF&nbsp;= bottom.</dd>
+        <dt>Half-sized base</dt>
+        <dd>A different feature entirely: splits the base into <strong>4× more</strong> feet, each 21×21&nbsp;mm (instead of one 42×42). Outer bin size and stackability are unchanged. Useful for half-Gridfinity grids. <em>Magnets are disabled automatically when this is on.</em></dd>
+      </dl>
+
+      <h3>Ultra light — material savings</h3>
+      <dl>
+        <dt>Wall thickness</dt>
+        <dd>Wall thickness in mm (0.3–1.35). FDM typically uses 0.8–1.2&nbsp;mm; thinner walls are mostly for prototyping.</dd>
+        <dt>Ultra light base</dt>
+        <dd>Hollows out the base with thin walls instead of a solid block — saves a lot of plastic and print time.</dd>
+        <dt>Ultra light labels</dt>
+        <dd>Adds stiffening ribs under the label slope and removes the material between them.</dd>
+        <dt>Label support density</dt>
+        <dd>Multiplier on the auto-computed rib count. <code>1.0</code> matches the original SCAD (one rib every ~13&nbsp;mm). <code>2.0</code> doubles the rib count, and so on. Capped automatically to keep at least 0.5&nbsp;mm of gap between ribs.</dd>
+      </dl>
+
+      <h3>Magnets — magnet pockets</h3>
+      <dl>
+        <dt>Magnets</dt><dd>Adds 4 circular pockets per base foot to seat mounting magnets.</dd>
+        <dt>Magnet diameter / depth</dt>
+        <dd>Magnet dimensions. Default <code>6.15×2.2&nbsp;mm</code> — the standard Gridfinity neodymium disc.</dd>
+      </dl>
+
+      <h3>Dividers — internal partitions</h3>
+      <dl>
+        <dt>Dividers</dt><dd>Enable dividers — the bin is split into a grid of compartments.</dd>
+        <dt>Dividers X / Y</dt>
+        <dd>Number of partitions along each axis. For example <code>X=1, Y=2</code> yields a 2×3 = 6-compartment grid.</dd>
+      </dl>
+
+      <h3>Labels — sloped label tabs</h3>
+      <p>Angled tabs at the top edge of compartments for marking or label inserts.</p>
+      <dl>
+        <dt>Label per section</dt><dd>With dividers on, generate a separate tab per compartment. Otherwise a single full-width tab.</dd>
+        <dt>Position</dt>
+        <dd><code>Full</code> — full width · <code>Left / Center / Right</code> — a short tab on the chosen side of each compartment.</dd>
+        <dt>Label width / depth</dt>
+        <dd>Tab dimensions in mm. Only used when position ≠ Full.</dd>
+      </dl>
+
+      <h3>Scoop — sloped front wall</h3>
+      <p>A quarter-cylinder is carved out of the front edge so small parts roll forward and are easy to scoop out with a fingertip.</p>
+      <dl>
+        <dt>Scoops</dt><dd>Enable the sloped front.</dd>
+        <dt>Scoop radius</dt>
+        <dd>Scoop radius in mm (recommended <code>15</code>). Larger radius = longer, gentler slope. With <code>Dividers Y</code> on, a separate scoop is generated for each Y compartment.</dd>
+      </dl>
+
+      <h3>Filenames</h3>
+      <p>Suffixes used in STL / JSON filenames:</p>
+      <dl>
+        <dt><code>3x2x6_w1</code></dt><dd>3×2×6 units, 1&nbsp;mm wall</dd>
+        <dt><code>hr / ht / hb</code></dt><dd>half on right / on top / Half-sized base</dd>
+        <dt><code>ulb / ull</code></dt><dd>Ultra light base / labels</dd>
+        <dt><code>lsd2</code></dt><dd>label support density multiplier (only when ≠ 1)</dd>
+        <dt><code>m6.15-2.2</code></dt><dd>magnets Ø6.15 × 2.2&nbsp;mm</dd>
+        <dt><code>div1x2</code></dt><dd>1 divider along X, 2 along Y</dd>
+        <dt><code>lblFa-30x13</code></dt><dd>label — F=Full / L=Left / C=Center / R=Right; <code>a</code> = per section; 30×13&nbsp;mm</dd>
+        <dt><code>sc15</code></dt><dd>scoop with 15&nbsp;mm radius</dd>
+      </dl>
+
+      <p style="margin-top:14px; color:var(--muted); font-size:12px;">Close: <kbd>Esc</kbd>, click the backdrop, or click «×».</p>
+    </div>
+  </div>
+</div>
+<div id="main">
+<aside id="sidebar">
+  <form id="form">
+    <fieldset>
+      <legend>Grid size</legend>
+      <div class="row"><label>Grids X<span class="help">u=42mm, step 0.5</span></label>
+        <input type="number" name="grids_x" value="{{ defaults.grids_x }}" min="0.5" max="15" step="0.5"></div>
+      <div class="row"><label>Grids Y</label>
+        <input type="number" name="grids_y" value="{{ defaults.grids_y }}" min="0.5" max="15" step="0.5"></div>
+      <div class="row"><label>Grids Z<span class="help">u=7mm</span></label>
+        <input type="number" name="grids_z" value="{{ defaults.grids_z }}" min="1" max="25" step="1"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Half grid</legend>
+      <div class="row"><label>Half grid on right</label>
+        <input type="checkbox" name="half_grid_right" {% if defaults.half_grid_right %}checked{% endif %}></div>
+      <div class="row"><label>Half grid on top</label>
+        <input type="checkbox" name="half_grid_top" {% if defaults.half_grid_top %}checked{% endif %}></div>
+      <div class="row"><label>Half-sized base</label>
+        <input type="checkbox" name="half_grid_base" {% if defaults.half_grid_base %}checked{% endif %}></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Ultra light</legend>
+      <div class="row"><label>Wall thickness (mm)</label>
+        <input type="number" name="wall_thickness" value="{{ defaults.wall_thickness }}" min="0.3" max="1.35" step="0.01"></div>
+      <div class="row"><label>Ultra light base</label>
+        <input type="checkbox" name="ultra_light_base" {% if defaults.ultra_light_base %}checked{% endif %}></div>
+      <div class="row"><label>Ultra light labels</label>
+        <input type="checkbox" name="ultra_light_labels" {% if defaults.ultra_light_labels %}checked{% endif %}></div>
+      <div class="row"><label>Label support density<span class="help">×, 1=original</span></label>
+        <input type="number" name="label_support_density" value="{{ defaults.label_support_density }}" min="1" max="5" step="0.5"></div>
+    </fieldset>
+
+    <fieldset id="grp-magnets" class="disabled-group">
+      <legend>Magnets <input class="group-toggle" type="checkbox" name="magnets" {% if defaults.magnets %}checked{% endif %}></legend>
+      <div class="row"><label>Magnet diameter (mm)</label>
+        <input type="number" name="magnet_diameter" value="{{ defaults.magnet_diameter }}" min="3" max="8" step="0.01"></div>
+      <div class="row"><label>Magnet depth (mm)</label>
+        <input type="number" name="magnet_depth" value="{{ defaults.magnet_depth }}" min="1" max="5" step="0.01"></div>
+    </fieldset>
+
+    <fieldset id="grp-dividers" class="disabled-group">
+      <legend>Dividers <input class="group-toggle" type="checkbox" name="dividers" {% if defaults.dividers %}checked{% endif %}></legend>
+      <div class="row"><label>Dividers X</label>
+        <input type="number" name="dividers_x" value="{{ defaults.dividers_x }}" min="0" max="15" step="1"></div>
+      <div class="row"><label>Dividers Y</label>
+        <input type="number" name="dividers_y" value="{{ defaults.dividers_y }}" min="0" max="15" step="1"></div>
+    </fieldset>
+
+    <fieldset id="grp-labels" class="disabled-group">
+      <legend>Labels <input class="group-toggle" type="checkbox" name="labels" {% if defaults.labels %}checked{% endif %}></legend>
+      <div class="row"><label>Label per section</label>
+        <input type="checkbox" name="label_for_each_section" {% if defaults.label_for_each_section %}checked{% endif %}></div>
+      <div class="row"><label>Position</label>
+        <select name="label_position">
+          <option value="Full" {% if defaults.label_position == 'Full' %}selected{% endif %}>Full</option>
+          <option value="Left" {% if defaults.label_position == 'Left' %}selected{% endif %}>Left</option>
+          <option value="Center" {% if defaults.label_position == 'Center' %}selected{% endif %}>Center</option>
+          <option value="Right" {% if defaults.label_position == 'Right' %}selected{% endif %}>Right</option>
+        </select></div>
+      <div class="row"><label>Label width (mm)</label>
+        <input type="number" name="label_width" value="{{ defaults.label_width }}" min="10" max="100" step="0.1"></div>
+      <div class="row"><label>Label depth (mm)</label>
+        <input type="number" name="label_depth" value="{{ defaults.label_depth }}" min="5" max="25" step="0.1"></div>
+    </fieldset>
+
+    <fieldset id="grp-scoops" class="disabled-group">
+      <legend>Scoop <input class="group-toggle" type="checkbox" name="scoops" {% if defaults.scoops %}checked{% endif %}></legend>
+      <div class="row"><label>Scoop radius (mm)</label>
+        <input type="number" name="scoop_radius" value="{{ defaults.scoop_radius }}" min="0" max="42" step="0.1"></div>
+    </fieldset>
+
+  </form>
+</aside>
+
+<div id="viewer-wrap">
+  <canvas id="viewer"></canvas>
+  <div id="spinner">
+    <span class="dot-spin"></span>
+    <span>Generating <span id="spinner-time">0.0s</span></span>
+  </div>
+  <div id="viewer-info">Drag = rotate · scroll = zoom · right-drag = pan</div>
+</div>
+</div><!-- /#main -->
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader }     from 'three/addons/loaders/STLLoader.js';
+
+const canvas = document.getElementById('viewer');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1c1f24);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
+camera.up.set(0, 0, 1); // Z is up
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.1;
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const key = new THREE.DirectionalLight(0xffffff, 0.9);
+key.position.set(120, 80, 200);
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xffffff, 0.35);
+fill.position.set(-80, -120, 80);
+scene.add(fill);
+
+// Build plate / origin reference
+const grid = new THREE.GridHelper(420, 21, 0x444444, 0x333333);
+grid.rotation.x = Math.PI / 2;
+scene.add(grid);
+
+let currentMesh = null;
+const material = new THREE.MeshStandardMaterial({
+  color: 0x4aa3ff,
+  metalness: 0.1,
+  roughness: 0.55,
+  flatShading: false,
+});
+
+function frameMesh(mesh) {
+  const box = new THREE.Box3().setFromObject(mesh);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  controls.target.copy(center);
+  const dist = Math.max(size.x, size.y, size.z) * 1.6 + 30;
+  camera.position.set(center.x + dist*0.7, center.y - dist, center.z + dist*0.6);
+  camera.near = 0.1;
+  camera.far = dist * 10;
+  camera.updateProjectionMatrix();
+  controls.update();
+}
+
+function resize() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (w === 0 || h === 0) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+(function loop() {
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+})();
+
+const loader = new STLLoader();
+
+function setMeshFromArrayBuffer(buf) {
+  const geom = loader.parse(buf);
+  geom.computeVertexNormals();
+  const mesh = new THREE.Mesh(geom, material);
+  if (currentMesh) {
+    scene.remove(currentMesh);
+    currentMesh.geometry.dispose();
+  }
+  scene.add(mesh);
+  currentMesh = mesh;
+  frameMesh(mesh);
+}
+
+// --- Form serialization ----------------------------------------------------
+
+const form = document.getElementById('form');
+const status = document.getElementById('status');
+const spinner = document.getElementById('spinner');
+const btnPreview = document.getElementById('btn-preview');
+const btnDownload = document.getElementById('btn-download');
+
+function serializeForm() {
+  const data = {};
+  for (const el of form.elements) {
+    if (!el.name) continue;
+    if (el.type === 'checkbox') data[el.name] = el.checked;
+    else if (el.type === 'number') data[el.name] = parseFloat(el.value);
+    else data[el.name] = el.value;
+  }
+  return data;
+}
+
+// Apply a params object to the form. Unknown keys are ignored; missing keys
+// keep their current values. Returns the list of keys that were applied.
+function applyToForm(data) {
+  if (!data || typeof data !== 'object') return [];
+  const applied = [];
+  for (const el of form.elements) {
+    if (!el.name || !(el.name in data)) continue;
+    const v = data[el.name];
+    if (el.type === 'checkbox') el.checked = !!v;
+    else if (el.type === 'number') el.value = (v === '' || v == null) ? '' : Number(v);
+    else el.value = String(v);
+    applied.push(el.name);
+  }
+  return applied;
+}
+
+const DEFAULTS = {{ defaults | tojson }};
+const LS_KEY = 'gridfinity_settings_v1';
+
+// Filename composer — must match _build_filename in app.py.
+function buildFilename(p, ext) {
+  const g = (n) => Number(n).toString();  // drops trailing ".0"
+  const out = [`gridfinity_${g(p.grids_x)}x${g(p.grids_y)}x${g(p.grids_z)}`];
+  out.push(`w${g(p.wall_thickness)}`);
+  if (p.half_grid_right)    out.push('hr');
+  if (p.half_grid_top)      out.push('ht');
+  if (p.half_grid_base)     out.push('hb');
+  if (p.ultra_light_base)   out.push('ulb');
+  if (p.ultra_light_labels) {
+    out.push('ull');
+    if (Number(p.label_support_density) !== 1)
+      out.push(`lsd${g(p.label_support_density)}`);
+  }
+  if (p.magnets)
+    out.push(`m${g(p.magnet_diameter)}-${g(p.magnet_depth)}`);
+  if (p.dividers && (p.dividers_x || p.dividers_y))
+    out.push(`div${p.dividers_x}x${p.dividers_y}`);
+  if (p.labels) {
+    const pos = String(p.label_position).charAt(0); // F/L/C/R
+    const a = p.label_for_each_section ? 'a' : '';
+    out.push(`lbl${pos}${a}-${g(p.label_width)}x${g(p.label_depth)}`);
+  }
+  if (p.scoops) out.push(`sc${g(p.scoop_radius)}`);
+  return out.join('_') + ext;
+}
+
+function persistToLocalStorage() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(serializeForm())); }
+  catch (_) { /* private mode / quota — silently ignore */ }
+}
+
+function loadFromLocalStorage() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    const obj = JSON.parse(raw);
+    return applyToForm(obj).length > 0;
+  } catch (_) { return false; }
+}
+
+// Group enable/disable based on master checkbox in legend
+function refreshGroups() {
+  for (const fs of form.querySelectorAll('fieldset.disabled-group, fieldset[id^="grp-"]')) {
+    const toggle = fs.querySelector('.group-toggle');
+    if (!toggle) continue;
+    fs.classList.toggle('disabled-group', !toggle.checked);
+  }
+}
+form.addEventListener('change', refreshGroups);
+refreshGroups();
+
+// Auto-regenerate on change with debounce.
+// Only ever one request is in flight; if a new one is requested while a
+// generation is running, mark "rerun" and fire a fresh one as soon as it
+// finishes — using the latest form state at that moment.
+let debounceTimer = null;
+let inFlight = false;
+let rerunRequested = false;
+
+function paramsValid(p) {
+  for (const v of Object.values(p)) {
+    if (typeof v === 'number' && !Number.isFinite(v)) return false;
+  }
+  return true;
+}
+
+const viewerWrap = document.getElementById('viewer-wrap');
+const spinnerTime = document.getElementById('spinner-time');
+
+let timerHandle = null;
+function setStatusBusy() {
+  status.replaceChildren();
+  status.classList.remove('error');
+  const dot = document.createElement('span');
+  dot.className = 'inline-spin';
+  status.appendChild(dot);
+  status.appendChild(document.createTextNode('Generating…'));
+}
+function startBusy() {
+  spinner.classList.add('show');
+  viewerWrap.classList.add('busy');
+  const t0 = performance.now();
+  spinnerTime.textContent = '0.0s';
+  timerHandle = setInterval(() => {
+    spinnerTime.textContent = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+  }, 100);
+  setStatusBusy();
+}
+function endBusy() {
+  spinner.classList.remove('show');
+  viewerWrap.classList.remove('busy');
+  if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
+}
+
+async function regenerate() {
+  if (inFlight) { rerunRequested = true; return; }
+  inFlight = true;
+  rerunRequested = false;
+
+  const params = serializeForm();
+  if (!paramsValid(params)) {
+    inFlight = false;
+    return; // silently skip — user is mid-typing (empty number field)
+  }
+
+  startBusy();
+  btnPreview.disabled = true;
+
+  const t0 = performance.now();
+  try {
+    const resp = await fetch('/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(params),
+    });
+    if (!resp.ok) {
+      let msg = `HTTP ${resp.status}`;
+      try { msg = (await resp.json()).error || msg; } catch (_) {}
+      throw new Error(msg);
+    }
+    const buf = await resp.arrayBuffer();
+    setMeshFromArrayBuffer(buf);
+    const dt = ((performance.now()-t0)/1000).toFixed(2);
+    status.textContent = `Generated in ${dt}s — ${(buf.byteLength/1024).toFixed(0)} KB`;
+  } catch (err) {
+    status.classList.add('error');
+    status.textContent = `Error: ${err.message}`;
+    console.error(err);
+  } finally {
+    endBusy();
+    btnPreview.disabled = false;
+    inFlight = false;
+    if (rerunRequested) regenerate();  // run with latest form values
+  }
+}
+
+function scheduleRegenerate() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(regenerate, 150);
+}
+
+form.addEventListener('input', scheduleRegenerate);
+form.addEventListener('change', scheduleRegenerate); // covers select, spinner clicks
+form.addEventListener('input', persistToLocalStorage);
+form.addEventListener('change', persistToLocalStorage);
+btnPreview.addEventListener('click', () => {
+  clearTimeout(debounceTimer);
+  regenerate();
+});
+
+// --- Config import / export / reset ---------------------------------------
+
+const btnExportConfig = document.getElementById('btn-export-config');
+const btnImportConfig = document.getElementById('btn-import-config');
+const btnReset        = document.getElementById('btn-reset');
+const fileImport      = document.getElementById('file-import');
+
+btnExportConfig.addEventListener('click', () => {
+  const params = serializeForm();
+  const blob = new Blob([JSON.stringify(params, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = buildFilename(params, '.json');
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  status.classList.remove('error');
+  status.textContent = `Exported ${a.download}`;
+});
+
+btnImportConfig.addEventListener('click', () => fileImport.click());
+fileImport.addEventListener('change', async () => {
+  const file = fileImport.files && fileImport.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const applied = applyToForm(data);
+    if (applied.length === 0) throw new Error('no recognised fields');
+    refreshGroups();
+    persistToLocalStorage();
+    status.classList.remove('error');
+    status.textContent = `Imported ${applied.length} fields from ${file.name}`;
+    regenerate();
+  } catch (err) {
+    status.classList.add('error');
+    status.textContent = `Import failed: ${err.message}`;
+  } finally {
+    fileImport.value = '';  // allow re-selecting the same file
+  }
+});
+
+btnReset.addEventListener('click', () => {
+  applyToForm(DEFAULTS);
+  refreshGroups();
+  try { localStorage.removeItem(LS_KEY); } catch (_) {}
+  status.classList.remove('error');
+  status.textContent = 'Reset to defaults';
+  regenerate();
+});
+
+btnDownload.addEventListener('click', async () => {
+  // Always full quality on download, regardless of "fast preview" toggle
+  startBusy();
+  btnDownload.disabled = true;
+  const t0 = performance.now();
+  try {
+    const r = await fetch('/generate?download=1', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(serializeForm()),
+    });
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try { msg = (await r.json()).error || msg; } catch (_) {}
+      throw new Error(msg);
+    }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = buildFilename(serializeForm(), '.stl');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    const dt = ((performance.now()-t0)/1000).toFixed(2);
+    status.textContent = `Downloaded ${a.download} in ${dt}s`;
+  } catch (err) {
+    status.classList.add('error');
+    status.textContent = `Download failed: ${err.message}`;
+  } finally {
+    endBusy();
+    btnDownload.disabled = false;
+  }
+});
+
+// --- Help modal ----------------------------------------------------------
+
+const helpOverlay = document.getElementById('help-overlay');
+const btnHelp = document.getElementById('btn-help');
+const btnHelpClose = document.getElementById('btn-help-close');
+
+function openHelp()  { helpOverlay.classList.add('show'); }
+function closeHelp() { helpOverlay.classList.remove('show'); }
+
+btnHelp.addEventListener('click', openHelp);
+btnHelpClose.addEventListener('click', closeHelp);
+helpOverlay.addEventListener('click', (e) => {
+  if (e.target === helpOverlay) closeHelp();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && helpOverlay.classList.contains('show')) closeHelp();
+});
+
+// Restore last-used settings (if any) before the first render.
+loadFromLocalStorage();
+refreshGroups();
+
+// Initial render
+regenerate();
+</script>
+</body>
+</html>
