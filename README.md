@@ -9,6 +9,8 @@ OpenSCAD is **not** used at runtime. The CSG runs in pure Python via
 a full bin generates in ~30–200 ms, fast enough to update the preview as you
 edit the form.
 
+![Preview](docs/preview.png)
+
 ## Credits & origin
 
 This is a **derivative work**. All geometry decisions, dimensions, and the
