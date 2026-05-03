@@ -47,6 +47,12 @@ class GridfinityParams:
 
     wall_thickness: float = 1.0
     ultra_light_base: bool = True
+    # Thickness (mm) of the foot's bottom plate — the solid layer between the
+    # build plate and the ultra-light cavity. 0 = use ``wall_thickness`` (stock
+    # SCAD geometry). Larger values = sturdier bottom + shallower bin interior;
+    # the cavity above is clipped accordingly. Has no effect when
+    # ultra_light_base is off.
+    ultra_light_floor_thickness: float = 0.0
     ultra_light_labels: bool = True
     # Multiplier on the auto-computed rib count under ultra-light label tabs.
     # 1.0 = original SCAD behaviour (one rib every 13 mm). 2.0 = twice as many.
@@ -258,6 +264,18 @@ def _make_bin_base_single(p: GridfinityParams, sx: float, sy: float,
 
     if (not p.half_grid_base) and p.magnets and wx == 1.0 and wy == 1.0:
         voids.append(_make_magnet_holes(p, sx, sy))
+
+    # The foot's bottom plate normally has thickness = wall_thickness (the
+    # cavity layers start at z = wall). When ``ultra_light_floor_thickness`` is
+    # set, raise the cavity floor by clipping any void below the requested z —
+    # equivalent to thickening the bottom plate to that value. Going thinner
+    # than wall_thickness is not supported (would require sculpting beneath
+    # Layer 1's chamfer).
+    if p.ultra_light_base and p.ultra_light_floor_thickness > wall:
+        box_top = h0 + h1 + h2 + wall
+        bottom_t = min(p.ultra_light_floor_thickness, box_top)
+        clip_block = _box(sx, sy, 0, Wx, Wy, bottom_t)
+        voids = [v - clip_block for v in voids]
 
     result = _diff_all(outer, voids)
 

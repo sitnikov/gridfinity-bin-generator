@@ -303,6 +303,8 @@
         <input type="number" name="wall_thickness" value="1" min="0.3" max="1.35" step="0.01"></div>
       <div class="row"><label>Ultra light base</label>
         <input type="checkbox" name="ultra_light_base" checked></div>
+      <div class="row"><label>Bottom thickness (mm)<span class="help">0 = wall thickness</span></label>
+        <input type="number" name="ultra_light_floor_thickness" value="0" min="0" max="4" step="0.1"></div>
       <div class="row"><label>Ultra light labels</label>
         <input type="checkbox" name="ultra_light_labels" checked></div>
       <div class="row"><label>Label support density<span class="help">×, 1=original</span></label>
@@ -494,7 +496,11 @@ function buildFilename(p, ext) {
   if (p.half_grid_right)    out.push('hr');
   if (p.half_grid_top)      out.push('ht');
   if (p.half_grid_base)     out.push('hb');
-  if (p.ultra_light_base)   out.push('ulb');
+  if (p.ultra_light_base) {
+    out.push('ulb');
+    if (Number(p.ultra_light_floor_thickness) > Number(p.wall_thickness))
+      out.push(`bot${g(p.ultra_light_floor_thickness)}`);
+  }
   if (p.ultra_light_labels) {
     out.push('ull');
     if (Number(p.label_support_density) !== 1)

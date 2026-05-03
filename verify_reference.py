@@ -25,7 +25,7 @@ import re
 
 import gridfinity as G
 
-REF_ROOT = ("/Users/sitnikov/Documents/Claude/gridfinity_web_generator_clode/"
+REF_ROOT = ("/Users/sitnikov/Documents/Claude/gridfinity_web_generator_claude/"
             "gridfinity-lite-economical-plain-storage-bins-model_files")
 
 

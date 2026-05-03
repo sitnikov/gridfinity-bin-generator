@@ -72,7 +72,7 @@ def _params_from_request() -> G.GridfinityParams:
     coerce_float = {
         "grids_x", "grids_y", "grids_z", "wall_thickness", "magnet_diameter",
         "magnet_depth", "label_width", "label_depth", "scoop_radius",
-        "label_support_density",
+        "label_support_density", "ultra_light_floor_thickness",
     }
     coerce_bool = {
         "half_grid_right", "half_grid_top", "half_grid_base",
@@ -139,7 +139,10 @@ def _build_filename(p: G.GridfinityParams, ext: str) -> str:
     if p.half_grid_right:     parts.append("hr")
     if p.half_grid_top:       parts.append("ht")
     if p.half_grid_base:      parts.append("hb")
-    if p.ultra_light_base:    parts.append("ulb")
+    if p.ultra_light_base:
+        parts.append("ulb")
+        if p.ultra_light_floor_thickness > p.wall_thickness:
+            parts.append(f"bot{p.ultra_light_floor_thickness:g}")
     if p.ultra_light_labels:
         parts.append("ull")
         if p.label_support_density != 1.0:

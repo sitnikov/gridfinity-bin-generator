@@ -49,6 +49,7 @@ export const DEFAULT_PARAMS = {
 
   wall_thickness: 1.0,
   ultra_light_base: true,
+  ultra_light_floor_thickness: 0.0,
   ultra_light_labels: true,
   label_support_density: 1.0,
 
@@ -190,6 +191,17 @@ function _make_bin_base_single(p, sx, sy, wx, wy) {
 
   if (!p.half_grid_base && p.magnets && wx === 1.0 && wy === 1.0) {
     voids.push(_make_magnet_holes(p, sx, sy));
+  }
+
+  // Bottom plate thickness override: clip every void to z >= floor when the
+  // user wants the foot's bottom plate thicker than the default `wall`.
+  if (p.ultra_light_base && p.ultra_light_floor_thickness > wall) {
+    const box_top = h0 + h1 + h2 + wall;
+    const bottom_t = Math.min(p.ultra_light_floor_thickness, box_top);
+    const clip = _box(sx, sy, 0, Wx, Wy, bottom_t);
+    for (let i = 0; i < voids.length; i++) {
+      voids[i] = voids[i].subtract(clip);
+    }
   }
 
   let result = _diff_all(outer, voids);

@@ -22,12 +22,31 @@ All scripts assume `cwd = repo root` (relative `gridfinity` import).
 | `gridfinity.py`                 | manifold3d CAD engine (1:1 SCAD port)                  |
 | `gridfinity_b123.py`            | Old build123d backend — kept as a CAD reference only   |
 | `app.py`                        | Flask: GET `/`, POST `/generate`, LRU STL cache        |
-| `templates/index.html`          | Form + Three.js viewer                                 |
+| `templates/index.html`          | Form + Three.js viewer (Flask version)                 |
+| `web/gridfinity.js`             | **Standalone JS port** — manifold-3d WASM in browser   |
+| `web/index.html`                | Form + viewer for the standalone JS version            |
 | `compare_geometry.py`           | Regression: bbox/volume manifold vs build123d          |
 | `verify_spec.py`                | Conformance vs the official Gridfinity spec            |
 | `verify_reference.py`           | Stackability vs reference STLs (Printables 265271)     |
 | `gridfinity_specification.pdf`  | Local copy of the spec (grizzie17, MIT)                |
 | `UltraLightGridfinityBins.scad` | Upstream SCAD — source of truth                        |
+
+There are **two parallel implementations** that must stay in sync:
+
+1. **Python** (`gridfinity.py` + Flask `app.py` + `templates/index.html`) —
+   server-side CSG with manifold3d Python bindings. Run with `python app.py`.
+2. **JavaScript** (`web/gridfinity.js` + `web/index.html`) — the same engine
+   ported to JS, runs entirely in the browser via the manifold-3d WASM build.
+   No server needed: `cd web && python3 -m http.server 5051`.
+
+Any geometry change (new SCAD layer, new parameter, new option) **must be
+applied to both `gridfinity.py` and `web/gridfinity.js`**, and any new form
+field must be added to **both** `templates/index.html` (Jinja-driven) and
+`web/index.html` (static, with hard-coded `value=`/`checked` defaults that
+mirror `DEFAULT_PARAMS` in `web/gridfinity.js`). Filename builders
+(`_build_filename` in `app.py` + `buildFilename` in both index.html files)
+also need to match. `verify_spec.py` only exercises the Python side — eyeball
+the `/web/` page after geometry changes.
 
 Reference STLs are **not bundled in the repo** (see README). Download them
 separately into `gridfinity-lite-economical-plain-storage-bins-model_files/`

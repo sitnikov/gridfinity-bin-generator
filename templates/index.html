@@ -220,6 +220,8 @@
         <dd>Wall thickness in mm (0.3–1.35). FDM typically uses 0.8–1.2&nbsp;mm; thinner walls are mostly for prototyping.</dd>
         <dt>Ultra light base</dt>
         <dd>Hollows out the base with thin walls instead of a solid block — saves a lot of plastic and print time.</dd>
+        <dt>Bottom thickness</dt>
+        <dd>Thickness (mm) of the foot's bottom plate — the solid layer between the build plate and the ultra-light cavity. <code>0</code> = use the wall thickness (stock SCAD behaviour). Larger values give a sturdier bottom; the cavity above shrinks accordingly so the outer foot height stays constant. Going below wall thickness isn't supported. Only effective when <em>Ultra light base</em> is on.</dd>
         <dt>Ultra light labels</dt>
         <dd>Adds stiffening ribs under the label slope and removes the material between them.</dd>
         <dt>Label support density</dt>
@@ -264,6 +266,7 @@
         <dt><code>3x2x6_w1</code></dt><dd>3×2×6 units, 1&nbsp;mm wall</dd>
         <dt><code>hr / ht / hb</code></dt><dd>half on right / on top / Half-sized base</dd>
         <dt><code>ulb / ull</code></dt><dd>Ultra light base / labels</dd>
+        <dt><code>bot1.5</code></dt><dd>ultra-light bottom plate thickness (mm, only when &gt; wall thickness)</dd>
         <dt><code>lsd2</code></dt><dd>label support density multiplier (only when ≠ 1)</dd>
         <dt><code>m6.15-2.2</code></dt><dd>magnets Ø6.15 × 2.2&nbsp;mm</dd>
         <dt><code>div1x2</code></dt><dd>1 divider along X, 2 along Y</dd>
@@ -304,6 +307,8 @@
         <input type="number" name="wall_thickness" value="{{ defaults.wall_thickness }}" min="0.3" max="1.35" step="0.01"></div>
       <div class="row"><label>Ultra light base</label>
         <input type="checkbox" name="ultra_light_base" {% if defaults.ultra_light_base %}checked{% endif %}></div>
+      <div class="row"><label>Bottom thickness (mm)<span class="help">0 = wall thickness</span></label>
+        <input type="number" name="ultra_light_floor_thickness" value="{{ defaults.ultra_light_floor_thickness }}" min="0" max="4" step="0.1"></div>
       <div class="row"><label>Ultra light labels</label>
         <input type="checkbox" name="ultra_light_labels" {% if defaults.ultra_light_labels %}checked{% endif %}></div>
       <div class="row"><label>Label support density<span class="help">×, 1=original</span></label>
@@ -501,7 +506,11 @@ function buildFilename(p, ext) {
   if (p.half_grid_right)    out.push('hr');
   if (p.half_grid_top)      out.push('ht');
   if (p.half_grid_base)     out.push('hb');
-  if (p.ultra_light_base)   out.push('ulb');
+  if (p.ultra_light_base) {
+    out.push('ulb');
+    if (Number(p.ultra_light_floor_thickness) > Number(p.wall_thickness))
+      out.push(`bot${g(p.ultra_light_floor_thickness)}`);
+  }
   if (p.ultra_light_labels) {
     out.push('ull');
     if (Number(p.label_support_density) !== 1)
