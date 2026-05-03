@@ -55,6 +55,46 @@ saves the current configuration with a descriptive filename like
 A built-in `?` button in the top bar opens an in-page reference for every
 parameter and the filename suffix scheme.
 
+## Browser-only build (experimental)
+
+There's also a fully client-side build under `web/` — same UI, same parameters,
+but the geometry is generated in your browser via the WASM build of manifold-3d.
+No Python, no server, no cold start.
+
+```bash
+python3 -m http.server 5070 --bind 127.0.0.1 -d web
+# open http://127.0.0.1:5070/
+```
+
+> **⚠️ Experimental.** Compared to the Python build, the WASM manifold engine
+> produces a slightly different triangulation (same volume and surface area to
+> 4 decimals, ~1.5% more / differently-arranged triangles). The browser build
+> is shipped for testing the UI and geometry pipeline; if in doubt, prefer the
+> Python (Flask) version, which has more upstream coverage (`compare_geometry.py`
+> against build123d, `verify_reference.py` against reference STLs).
+
+The browser build is designed for static hosting (e.g. GitHub Pages) — it has
+no backend dependency. WASM and Three.js are loaded from unpkg CDNs.
+
+## Print-verification status
+
+The geometry of both builds passes the dimensional checks below, but the
+maintainer **has not yet run physical prints** of any size to confirm
+real-world tolerances (foot fit on baseplates, lip stackability, magnet hole
+fit, label-tab strength, etc.). If you print something from this generator,
+treat the first print as a **calibration** — start with a small bin (1×1×3
+or 1×2×3), check baseplate fit and lip stackability before committing to a
+large run, and please open an issue if you find tolerance problems.
+
+Geometric checks that do pass (Python build):
+
+* `verify_spec.py` — 24 / 24 dimensional checks against the official Gridfinity
+  spec (within 0.001 mm).
+* `verify_reference.py` — outer footprint + mutual stackability against the
+  Printables 265271 reference STL set, 12 sizes from 1×1×3 to 5×5×12.
+* `compare_geometry.py` — Δ volume < 0.4 % vs an independent build123d
+  (NURBS / OpenCascade) implementation of the same SCAD source.
+
 ## Features
 
 * All parameters from the original SCAD: grid size (incl. half-grid), wall
@@ -74,7 +114,8 @@ parameter and the filename suffix scheme.
 | `gridfinity.py`                   | manifold3d CAD engine (1:1 SCAD port)         |
 | `gridfinity_b123.py`              | optional build123d backend — regression only  |
 | `app.py`                          | Flask: GET `/`, POST `/generate`, LRU cache   |
-| `templates/index.html`            | Form + Three.js viewer + help modal           |
+| `templates/index.html`            | Form + Three.js viewer + help modal (Flask)   |
+| `web/index.html` + `web/gridfinity.js` | Browser-only build (manifold-3d WASM, experimental) |
 | `verify_spec.py`                  | Conformance check vs the official Gridfinity spec |
 | `verify_reference.py`             | Stackability check vs reference STLs (\*)     |
 | `compare_geometry.py`             | manifold3d ↔ build123d regression             |
@@ -96,19 +137,6 @@ at the repo root.
 Uses defaults (1×2×3, ultra-light, no magnets/dividers/labels/scoop).
 For non-default parameters, import `GridfinityParams` and call
 `export(p, path)`.
-
-## Verification
-
-* `verify_spec.py` — geometry vs the official Gridfinity spec (grizzie17,
-  Printables 417152). 24 / 24 dimensional checks pass to within 0.001 mm of
-  the spec values.
-* `verify_reference.py` — outer-XY footprint and stackability vs the reference
-  STL set; 12 sizes from 1×1×3 up to 5×5×12 verified mutually stackable.
-* `compare_geometry.py` — optional. Builds the same set with the build123d
-  backend (NURBS + OpenCascade) and compares bbox / volume to manifold3d.
-  Δ volume < 0.4 % on all sizes — adaptive cylinder segmentation in
-  manifold3d follows OpenSCAD's `$fa` / `$fs` formula, so output triangulation
-  matches OpenSCAD's CGAL output to within ≈0.003 % volume.
 
 ## Architecture notes
 
