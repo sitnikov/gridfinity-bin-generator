@@ -1,5 +1,7 @@
 # Gridfinity Bin Generator
 
+🌐 **Live demo (browser-only build):** <https://sitnikov.github.io/gridfinity-bin-generator/>
+
 Web-based generator for **Ultra Light Gridfinity Bins** — Python port of
 HuMa_Meng's [Parametric Gridfinity Ultra Light Bins](https://www.printables.com/model/925520-gridfinity-ultra-light-bin-generator)
 SCAD source, with a Flask backend and a live Three.js 3D preview.
