@@ -1,11 +1,11 @@
-# Gridfinity Web Generator — для Claude
+# Gridfinity Web Generator — notes for Claude
 
-Веб-генератор Gridfinity-бункеров. Python-порт `UltraLightGridfinityBins.scad`
-(HuMa\_Meng) → Flask + Three.js. CSG-движок — **manifold3d** (mesh-CSG в C++).
+Web generator for Gridfinity bins. Python port of `UltraLightGridfinityBins.scad`
+(HuMa\_Meng) → Flask + Three.js. CSG engine — **manifold3d** (mesh-CSG in C++).
 
-## Запуск
+## Run
 
-Python 3.10–3.12. На 3.14 OCP-бэкенд не собирается:
+Python 3.10–3.12. The OCP backend (build123d) doesn't build on 3.13/3.14:
 
 ```bash
 python3.12 -m venv venv
@@ -13,35 +13,39 @@ python3.12 -m venv venv
 ./venv/bin/python app.py     # http://127.0.0.1:5050/
 ```
 
-Все скрипты ожидают `cwd = корень репо` (импорт `gridfinity` относительно).
+All scripts assume `cwd = repo root` (relative `gridfinity` import).
 
-## Архитектура
+## Architecture
 
-| Файл                     | Роль                                                   |
-|--------------------------|--------------------------------------------------------|
-| `gridfinity.py`          | CAD-движок на manifold3d (1:1 порт SCAD)               |
-| `gridfinity_b123.py`     | Старый build123d-бэкенд — точный CAD-референс          |
-| `app.py`                 | Flask: GET `/`, POST `/generate`, LRU-кэш STL          |
-| `templates/index.html`   | Форма + Three.js viewer                                |
-| `compare_geometry.py`    | Регресс: bbox/volume manifold vs build123d             |
-| `verify_spec.py`         | Сверка с официальной Gridfinity spec                   |
-| `verify_reference.py`    | Stackability против reference STL (Printables 265271)  |
-| `gridfinity_specification.pdf` | Локальная копия spec (grizzie17)                 |
-| `UltraLightGridfinityBins.scad` | Оригинальный SCAD — источник истины             |
+| File                            | Role                                                   |
+|---------------------------------|--------------------------------------------------------|
+| `gridfinity.py`                 | manifold3d CAD engine (1:1 SCAD port)                  |
+| `gridfinity_b123.py`            | Old build123d backend — kept as a CAD reference only   |
+| `app.py`                        | Flask: GET `/`, POST `/generate`, LRU STL cache        |
+| `templates/index.html`          | Form + Three.js viewer                                 |
+| `compare_geometry.py`           | Regression: bbox/volume manifold vs build123d          |
+| `verify_spec.py`                | Conformance vs the official Gridfinity spec            |
+| `verify_reference.py`           | Stackability vs reference STLs (Printables 265271)     |
+| `gridfinity_specification.pdf`  | Local copy of the spec (grizzie17, MIT)                |
+| `UltraLightGridfinityBins.scad` | Upstream SCAD — source of truth                        |
 
-## Ключевые design decisions
+Reference STLs are **not bundled in the repo** (see README). Download them
+separately into `gridfinity-lite-economical-plain-storage-bins-model_files/`
+to run `verify_reference.py`.
 
-### Backend: manifold3d, не build123d
+## Key design decisions
 
-Изначально начинали с build123d (NURBS / OpenCascade) — он давал ~0.8–4 с
-на бункер из-за дорогих boolean ops. Переписали на manifold3d (mesh-CSG) —
-сейчас 30–200 мс, в ~20× быстрее.  build123d сохранён в `gridfinity_b123.py`
-исключительно как референс для регресс-теста — **не используется в проде**.
+### Backend: manifold3d, not build123d
+
+We started on build123d (NURBS / OpenCascade) — ~0.8–4 s per bin due to
+expensive boolean ops. Rewrote on manifold3d (mesh-CSG): now 30–200 ms,
+~20× faster. build123d is preserved in `gridfinity_b123.py` only as a
+regression-test reference — **not used in production**.
 
 ### SCAD → manifold3d mapping
 
-Каждая SCAD-конструкция переведена дословно. **Не упрощать и не оптимизировать
-геометрию** — мы повторяем исходник `UltraLightGridfinityBins.scad` 1:1:
+Every SCAD construct is translated literally. **Do not simplify or optimise
+the geometry** — we mirror `UltraLightGridfinityBins.scad` 1:1:
 
 | SCAD                    | manifold3d                              |
 |-------------------------|-----------------------------------------|
@@ -50,95 +54,110 @@ python3.12 -m venv venv
 | `union` / `difference`  | `+` / `-`                               |
 | `hull() { 4 cylinders }`| `Manifold.batch_hull([…])`              |
 
-Если кто-то добавляет фичу — ищи в SCAD-исходнике как там это сделано, и
-переноси в том же стиле. Не лофти и не упрощай — convex hull 4-х цилиндров
-это **ровно та же геометрия**, что в SCAD CGAL.
+If you add a feature, find the equivalent in the SCAD source and translate
+it in the same style. Don't loft, don't simplify — a convex hull of 4
+cylinders is **exactly the same geometry** as in SCAD CGAL.
 
 ### CSG robustness: EPS_VOID
 
-manifold3d (как и любой mesh-CSG) роняется на **coplanar surfaces** —
-если void в `_diff_all` имеет грань точно совпадающую с outer surface,
-от subtract остаётся zero-thickness shell, и следующие subtract ломаются.
+manifold3d (like any mesh-CSG) breaks on **coplanar surfaces** — if a void
+in `_diff_all` has a face that exactly coincides with the outer surface,
+the subtract leaves a zero-thickness shell and subsequent subtracts fail.
 
-Решено через `_hull4_void()`: void растёт на `EPS_VOID = 1e-3` мм во всех
-направлениях. Это ниже точности 3D-печати в 100×, но устраняет
-robustness-проблемы CGAL/manifold.
+Solved via `_hull4_void()`: the void is grown by `EPS_VOID = 1e-3` mm in
+all directions. That's 100× below 3D-printer precision, but eliminates the
+CGAL/manifold robustness issues.
 
-Применяется **только в `_make_bin_stacklip`**, где void и outer имеют
-совпадающие радиусы. Если добавляешь новый difference и видишь странные
-артефакты по верху — проверь, нет ли coplanar surfaces, замени `_hull4`
-на `_hull4_void` для voids.
+Used **only in `_make_bin_stacklip`**, where void and outer have matching
+radii. If you add a new difference and see odd artefacts at the top —
+check for coplanar surfaces and replace `_hull4` with `_hull4_void` for
+the voids.
 
-### Дискретизация цилиндров
+### Cylinder discretization
 
-Адаптивная, как в OpenSCAD: `FA = 8°`, `FS = 0.25 мм` (значения из секции
-`[Hidden]` исходного SCAD).  Каждый цилиндр получает
-`segments = max(5, min(⌈360/FA⌉, ⌈2π·r/FS⌉))` через `_segments_for_radius()`.
+Adaptive, like OpenSCAD: `FA = 8°`, `FS = 0.25 mm` (values from the
+`[Hidden]` section of the original SCAD). Each cylinder gets
+`segments = max(5, min(⌈360/FA⌉, ⌈2π·r/FS⌉))` via `_segments_for_radius()`.
 
-Это даёт точно ту же триангуляцию, что и OpenSCAD сам — на 3×3×6 со всеми
-features наш volume отличается от OpenSCAD-рендера на **0.0025 %** (≈3 мм³),
-bbox X/Y совпадает ровно. Маленькие радиусы получают мало сегментов
-(например r=0.6 → 16), большие — больше (r=8 → 45).
+This produces the exact same triangulation as OpenSCAD itself — on 3×3×6
+with all features, our volume differs from the OpenSCAD render by
+**0.0025 %** (≈3 mm³), bbox X/Y matches exactly. Small radii get fewer
+segments (e.g. r=0.6 → 16), large radii get more (r=8 → 45).
 
-`CIRCULAR_SEGMENTS = 32` оставлен как fallback, но фактически нигде не
-используется — все вызовы `_cyl()` идут через адаптивный счётчик.
+`CIRCULAR_SEGMENTS = 32` is kept as a fallback but is effectively unused —
+every `_cyl()` call routes through the adaptive counter.
 
-### Magnet position отклоняется от spec
+### `_unit_xy(p)` and `Half-sized base`
 
-HuMa\_Meng's SCAD ставит магниты в `(BASIC_RADIUS_2, BASIC_RADIUS_2) = (8, 8)`
-от угла grid unit, а Gridfinity spec говорит 4.8 мм от наружной грани (=5.05
-от угла unit с offset).  Это **специальное отклонение исходного SCAD**,
-не баг. Описано в README. Если кто-то жалуется — менять только если
-пользователь явно попросит, иначе нарушим 1:1-соответствие исходнику.
+SCAD pairs the `Half_Grid_Base` toggle with two synchronised changes:
+`Grids_X_/Grids_Y_ = 2 × Grids_X/Y` AND `Basic_Unit_XY = 0.5 × 42.0`.
+Net external size is unchanged; the base is just split into 4× more
+smaller feet.
 
-### Серверный кэш STL
+Earlier the Python port doubled the count but kept `BASIC_UNIT_XY = 42.0`
+fixed → external dimensions came out 2× too big. Now there's a
+`_unit_xy(p)` helper that returns 21 mm when `half_grid_base` is on, and
+all `_make_*` functions use that instead of the constant. Don't undo
+this.
 
-LRU 32 элемента + per-key Lock. Ключ = sorted tuple of `asdict(params)`.
-Повторные запросы (debounce-флаппинг, return к прежнему значению) — <1 мс.
+### Magnet position deviates from spec
 
-## Тесты
+HuMa\_Meng's SCAD places magnets at `(BASIC_RADIUS_2, BASIC_RADIUS_2) = (8, 8)`
+from the grid-unit corner, while the Gridfinity spec says 4.8 mm from the
+outer face (= 5.05 from the unit corner with offset). This is a
+**deliberate deviation in the upstream SCAD**, not a bug. Documented in
+README. Only change if a user explicitly asks — otherwise we break the
+1:1 correspondence with the source.
 
-Все три скрипта запускаются из корня репо без аргументов, выходят с кодом
-ненулевой если что-то расходится:
+### Server-side STL cache
+
+LRU of 32 entries + per-key Lock. Key = sorted tuple of `asdict(params)`.
+Repeat requests (debounce flapping, returning to a prior value) — <1 ms.
+
+## Tests
+
+All three scripts run from the repo root with no arguments and exit
+non-zero if anything diverges:
 
 ```bash
-./venv/bin/python verify_spec.py        # 24/24 точек spec
-./venv/bin/python verify_reference.py   # vs Printables 265271
-./venv/bin/python compare_geometry.py   # vs build123d (нужен build123d)
+./venv/bin/python verify_spec.py        # 24/24 spec checkpoints
+./venv/bin/python verify_reference.py   # vs Printables 265271 (need to download STLs)
+./venv/bin/python compare_geometry.py   # vs build123d (needs build123d)
 ```
 
-Перед коммитом изменений геометрии **обязательно прогоняй `verify_spec.py`** —
-это база. `compare_geometry.py` опциональный, требует тяжёлый build123d.
+Before committing geometry changes, **always run `verify_spec.py`** —
+that's the baseline. `compare_geometry.py` is optional and pulls in the
+heavy build123d.
 
-## Грабли / gotchas
+## Gotchas
 
-* **Не использовать Python 3.13/3.14** — у `cadquery-ocp` нет колёс, build123d
-  не установится. 3.12 — sweet spot.
-* **Не запускать тесты без `cd <repo>`** — модули импортируются
-  относительно cwd.
-* **Reference STL в `gridfinity-lite-...-model_files/` — это ASCII-STL.**
-  Бинарный reader на них рухнет. `verify_reference.py` поддерживает оба
-  формата, не сломай при правке.
-* **`_diff_all`/`_union_all` фильтруют empty parts** через `is_empty()`. Если
-  модуль может вернуть пустой `Manifold()`, это нормально — фильтрация
-  отработает.
-* **0.75 мм у самого верха лип** — это `h5` в SCAD-коде, intentional cut.
-  Spec даёт 24.69 мм для 1×1×3 (R0.5 fillet), reference STL — 24.80,
-  наш — 24.65. Все в пределах 0.15 мм, не повод править.
-* **Half-grid (`grids_x = 1.5`)**: в SCAD это специальный режим с mirror,
-  смотри `_mirror_xy()`. Если меняешь base/clean — обязательно прогоняй
-  `verify_spec.py` с half-grid пресетами (там уже есть).
+* **Don't use Python 3.13/3.14** — `cadquery-ocp` has no wheels, so
+  build123d won't install. 3.12 is the sweet spot.
+* **Don't run tests without `cd <repo>`** — modules import relative to cwd.
+* **Reference STLs in `gridfinity-lite-...-model_files/` are ASCII-STL.**
+  A binary reader will crash on them. `verify_reference.py` supports both
+  formats — don't break that.
+* **`_diff_all` / `_union_all` filter empty parts** via `is_empty()`. If
+  a module can return an empty `Manifold()`, that's fine — filtering
+  handles it.
+* **0.75 mm at the very top of the lip** is `h5` in SCAD code, an
+  intentional cut. Spec gives 24.69 mm for 1×1×3 (R0.5 fillet), reference
+  STL gives 24.80, ours gives 24.65. All within 0.15 mm — don't "fix".
+* **Half-grid (`grids_x = 1.5`)**: in SCAD it's a special mirror mode,
+  see `_mirror_xy()`. If you change base/clean, run `verify_spec.py`
+  including the half-grid presets (already in there).
 
-## Конвенции
+## Conventions
 
-* **Не добавляй фичи, которых нет в SCAD-исходнике** без явной просьбы
-  пользователя. Этот проект — порт, а не fork.
-* **Координаты в `_make_*` функциях — в "локальных" единицах модуля** (где
-  start_x/start_y = угол grid unit или footprint). Перевод в финальный фрейм
-  делается в `build_bin()` через `_mirror_xy()` и финальный
-  `translate([-Wx/2, -Wy/2, 0])`.
-* **Все размеры в мм**.  EPS — `1e-3` мм (= 1 µm), tolerance проверок —
-  `0.001` для CSG-eps, `0.05` для геометрических допусков, `0.5` для
+* **Don't add features that aren't in the upstream SCAD** without an
+  explicit user request. This project is a port, not a fork in spirit.
+* **Coordinates inside `_make_*` functions are in "module-local" units**
+  (where start_x/start_y = corner of the grid unit or footprint). The
+  translation to the final frame happens in `build_bin()` via
+  `_mirror_xy()` and the final `translate([-Wx/2, -Wy/2, 0])`.
+* **All dimensions are in mm.** EPS = `1e-3` mm (= 1 µm). Tolerance
+  thresholds: `0.001` for CSG-eps, `0.05` for geometry, `0.5` for
   stackability.
-* **Не вытаскивать build123d в `requirements.txt`** — он тяжёлый (200 МБ
-  OCP), нужен только для `compare_geometry.py`. Кто хочет — поставит сам.
+* **Don't pull build123d into `requirements.txt`** — it's heavy (200 MB
+  of OCP) and only needed for `compare_geometry.py`. Anyone who wants
+  it can install it themselves.
