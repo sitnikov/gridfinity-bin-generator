@@ -69,6 +69,10 @@ export const DEFAULT_PARAMS = {
 
   scoops: false,
   scoop_radius: 15.0,
+
+  brim_ears: false,
+  brim_ear_diameter: 10.0,
+  brim_ear_height: 0.4,
 };
 
 // ---------------------------------------------------------------------------
@@ -558,6 +562,26 @@ function _make_bin_clean(p, gx_, gy_) {
 // Top level
 // ---------------------------------------------------------------------------
 
+function _make_brim_ears(p, Wx, Wy) {
+  // Flat discs at the four outer corners (after centering) for first-layer
+  // bed adhesion on open printers. Disc centers are tucked diagonally inside
+  // by 3/4 of BASIC_RADIUS_1 so they meaningfully overlap the rounded foot —
+  // placing them on the bbox corner leaves only a hairline contact.
+  // Must be unioned AFTER the clean subtract so the corner-clearance cut
+  // doesn't slice their inner halves away.
+  if (!p.brim_ears || p.brim_ear_diameter <= 0 || p.brim_ear_height <= 0) {
+    return null;  // caller checks for null; avoid calling `new Manifold()` —
+                  // some manifold-3d builds crash on the empty constructor.
+  }
+  const r = p.brim_ear_diameter / 2.0;
+  const h = p.brim_ear_height;
+  const inset = BASIC_RADIUS_1 * 0.75;
+  const hx = Wx / 2.0 - inset;
+  const hy = Wy / 2.0 - inset;
+  const corners = [[-hx, -hy], [hx, -hy], [-hx, hy], [hx, hy]];
+  return _union_all(corners.map(([cx, cy]) => _cyl(cx, cy, 0.0, h, r, r)));
+}
+
 function _mirror_xy(part, mirror_x, mirror_y, Wx, Wy) {
   if (!mirror_x && !mirror_y) return part;
   if (mirror_x && !mirror_y) return part.mirror([1, 0, 0]).translate([Wx, 0, 0]);
@@ -591,10 +615,15 @@ export function buildBin(params) {
   let clean = _make_bin_clean(p, gx_, gy_);
   clean = _mirror_xy(clean, !p.half_grid_right, !p.half_grid_top, Wx, Wy);
 
-  const result = union_part.subtract(clean);
+  let result = union_part.subtract(clean);
 
   // SCAD centers the footprint on the origin
-  return result.translate([-Wx / 2.0, -Wy / 2.0, 0]);
+  result = result.translate([-Wx / 2.0, -Wy / 2.0, 0]);
+
+  // Brim "mouse ears" — placed AFTER clean so their inner halves aren't clipped.
+  const ears = _make_brim_ears(p, Wx, Wy);
+  if (ears) result = Manifold.union([result, ears]);
+  return result;
 }
 
 // ---------------------------------------------------------------------------

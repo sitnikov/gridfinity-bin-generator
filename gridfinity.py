@@ -75,6 +75,14 @@ class GridfinityParams:
     scoops: bool = False
     scoop_radius: float = 15.0
 
+    # Brim "mouse ears" — flat discs added at the four outer corners of the
+    # bin to improve first-layer bed adhesion on open / unheated printers.
+    # Not part of the upstream SCAD; lives entirely outside the bin's bbox
+    # except for a small overlap at the corner foot for fusion.
+    brim_ears: bool = False
+    brim_ear_diameter: float = 10.0
+    brim_ear_height: float = 0.4
+
 
 # ---------------------------------------------------------------------------
 # Constants from the SCAD source
@@ -647,6 +655,33 @@ def _make_bin_clean(p: GridfinityParams, gx_: float, gy_: float) -> Manifold:
 # ---------------------------------------------------------------------------
 
 
+def _make_brim_ears(p: GridfinityParams, Wx: float, Wy: float) -> Manifold:
+    """Flat discs at the four outer corners (after centering) to improve
+    first-layer adhesion on open printers — same idea as a slicer's "mouse
+    ears" / brim ears.
+
+    Disc centers are tucked diagonally INSIDE the bbox by 3/4 of the corner
+    radius (= BASIC_RADIUS_1 * 3/4 = 3 mm) so the disc significantly overlaps
+    the rounded foot — sitting the center exactly on the bbox corner leaves
+    only a hairline contact (the foot is rounded with R=BASIC_RADIUS_1, so
+    its closest point to the bbox corner is ~1.55 mm in along the diagonal).
+    With this offset, an Ø10 disc still sticks out past the bbox by ~2.25 mm
+    on each X/Y side while keeping a large overlap with the foot.
+
+    Must be unioned *after* the `_make_bin_clean` subtract, otherwise the
+    corner-clearance cut would slice the inner half away.
+    """
+    if (not p.brim_ears) or p.brim_ear_diameter <= 0 or p.brim_ear_height <= 0:
+        return Manifold()
+    r = p.brim_ear_diameter / 2.0
+    h = p.brim_ear_height
+    inset = BASIC_RADIUS_1 * 0.75
+    hx = Wx / 2.0 - inset
+    hy = Wy / 2.0 - inset
+    corners = [(-hx, -hy), (hx, -hy), (-hx, hy), (hx, hy)]
+    return _union_all([_cyl(cx, cy, 0.0, h, r, r) for cx, cy in corners])
+
+
 def _mirror_xy(part: Manifold, mirror_x: bool, mirror_y: bool,
                Wx: float, Wy: float) -> Manifold:
     if not mirror_x and not mirror_y:
@@ -685,7 +720,14 @@ def build_bin(p: GridfinityParams) -> Manifold:
     result = union_part - clean
 
     # SCAD centers the footprint on the origin
-    return result.translate([-Wx / 2.0, -Wy / 2.0, 0])
+    result = result.translate([-Wx / 2.0, -Wy / 2.0, 0])
+
+    # Brim "mouse ears" are added *after* the clean subtract — otherwise the
+    # corner-clearance cut would slice their inner halves away.
+    ears = _make_brim_ears(p, Wx, Wy)
+    if not ears.is_empty():
+        result = result + ears
+    return result
 
 
 def to_stl_bytes(part: Manifold) -> bytes:

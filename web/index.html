@@ -256,6 +256,16 @@
         <dd>Scoop radius in mm (recommended <code>15</code>). Larger radius = longer, gentler slope. With <code>Dividers Y</code> on, a separate scoop is generated for each Y compartment.</dd>
       </dl>
 
+      <h3>Brim ears — first-layer adhesion</h3>
+      <p>Flat discs (a.k.a. <em>mouse ears</em>) added at the four outer corners of the bin to help the first layer stick on open / unheated printers. They sit on the build plate and partially overlap the corner foot, so they print as part of the same body and can be cut off afterwards.</p>
+      <dl>
+        <dt>Brim ears</dt><dd>Enable the four corner discs. Off by default — only print them if your printer needs the extra hold.</dd>
+        <dt>Ear diameter</dt>
+        <dd>Disc diameter in mm. <code>8–12&nbsp;mm</code> is typical. Larger = stronger hold but more cleanup.</dd>
+        <dt>Ear height</dt>
+        <dd>Disc height in mm — pick 1–2 print layers (e.g. <code>0.2</code>, <code>0.3</code>, <code>0.4</code>). Above 2 layers the ears get hard to snap off.</dd>
+      </dl>
+
       <h3>Filenames</h3>
       <p>Suffixes used in STL / JSON filenames:</p>
       <dl>
@@ -267,6 +277,7 @@
         <dt><code>div1x2</code></dt><dd>1 divider along X, 2 along Y</dd>
         <dt><code>lblFa-30x13</code></dt><dd>label — F=Full / L=Left / C=Center / R=Right; <code>a</code> = per section; 30×13&nbsp;mm</dd>
         <dt><code>sc15</code></dt><dd>scoop with 15&nbsp;mm radius</dd>
+        <dt><code>be10-0.4</code></dt><dd>brim ears Ø10&nbsp;mm × 0.4&nbsp;mm height</dd>
       </dl>
 
       <p style="margin-top:14px; color:var(--muted); font-size:12px;">Close: <kbd>Esc</kbd>, click the backdrop, or click «×».</p>
@@ -348,6 +359,14 @@
       <legend>Scoop <input class="group-toggle" type="checkbox" name="scoops"></legend>
       <div class="row"><label>Scoop radius (mm)</label>
         <input type="number" name="scoop_radius" value="15" min="0" max="42" step="0.1"></div>
+    </fieldset>
+
+    <fieldset id="grp-brim-ears" class="disabled-group">
+      <legend>Brim ears <input class="group-toggle" type="checkbox" name="brim_ears"></legend>
+      <div class="row"><label>Ear diameter (mm)</label>
+        <input type="number" name="brim_ear_diameter" value="10" min="3" max="25" step="0.5"></div>
+      <div class="row"><label>Ear height (mm)<span class="help">1–2 layers</span></label>
+        <input type="number" name="brim_ear_height" value="0.4" min="0.1" max="1" step="0.05"></div>
     </fieldset>
 
   </form>
@@ -516,6 +535,7 @@ function buildFilename(p, ext) {
     out.push(`lbl${pos}${a}-${g(p.label_width)}x${g(p.label_depth)}`);
   }
   if (p.scoops) out.push(`sc${g(p.scoop_radius)}`);
+  if (p.brim_ears) out.push(`be${g(p.brim_ear_diameter)}-${g(p.brim_ear_height)}`);
   return out.join('_') + ext;
 }
 

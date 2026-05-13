@@ -73,11 +73,13 @@ def _params_from_request() -> G.GridfinityParams:
         "grids_x", "grids_y", "grids_z", "wall_thickness", "magnet_diameter",
         "magnet_depth", "label_width", "label_depth", "scoop_radius",
         "label_support_density", "ultra_light_floor_thickness",
+        "brim_ear_diameter", "brim_ear_height",
     }
     coerce_bool = {
         "half_grid_right", "half_grid_top", "half_grid_base",
         "ultra_light_base", "ultra_light_labels",
         "magnets", "dividers", "labels", "label_for_each_section", "scoops",
+        "brim_ears",
     }
     for k in coerce_int:
         merged[k] = int(merged[k])
@@ -157,6 +159,8 @@ def _build_filename(p: G.GridfinityParams, ext: str) -> str:
         parts.append(f"lbl{pos}{a}-{p.label_width:g}x{p.label_depth:g}")
     if p.scoops:
         parts.append(f"sc{p.scoop_radius:g}")
+    if p.brim_ears:
+        parts.append(f"be{p.brim_ear_diameter:g}-{p.brim_ear_height:g}")
     return "_".join(parts) + ext
 
 
