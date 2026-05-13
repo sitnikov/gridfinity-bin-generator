@@ -17,3 +17,7 @@ test/
 *.bak
 *~
 *_copy.scad
+
+# Listing drafts for external 3D-model platforms (Printables, MakerWorld, ...)
+# — personal copy/paste cheat sheets, not part of the public repo.
+listings/
