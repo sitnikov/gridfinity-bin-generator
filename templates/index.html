@@ -541,7 +541,15 @@ function buildFilename(p, ext) {
     out.push(`div${p.dividers_x}x${p.dividers_y}`);
   if (p.labels) {
     const pos = String(p.label_position).charAt(0); // F/L/C/R
-    const a = p.label_for_each_section ? 'a' : '';
+    // The "per section" flag only affects geometry when dividers exist on
+    // the relevant axis: Full uses only Y, the others use both X and Y.
+    let effective = false;
+    if (p.label_for_each_section && p.dividers) {
+      effective = pos === 'F'
+        ? Number(p.dividers_y) > 0
+        : Number(p.dividers_x) > 0 || Number(p.dividers_y) > 0;
+    }
+    const a = effective ? 'a' : '';
     out.push(`lbl${pos}${a}-${g(p.label_width)}x${g(p.label_depth)}`);
   }
   if (p.scoops) out.push(`sc${g(p.scoop_radius)}`);

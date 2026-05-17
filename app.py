@@ -155,7 +155,13 @@ def _build_filename(p: G.GridfinityParams, ext: str) -> str:
         parts.append(f"div{p.dividers_x}x{p.dividers_y}")
     if p.labels:
         pos = p.label_position[0]  # F/L/C/R
-        a = "a" if p.label_for_each_section else ""
+        # The "per section" flag only affects geometry when dividers exist on
+        # the relevant axis: Full uses only Y, the others use both X and Y.
+        if p.label_for_each_section and p.dividers:
+            effective = (p.dividers_y > 0) if pos == "F" else (p.dividers_x > 0 or p.dividers_y > 0)
+        else:
+            effective = False
+        a = "a" if effective else ""
         parts.append(f"lbl{pos}{a}-{p.label_width:g}x{p.label_depth:g}")
     if p.scoops:
         parts.append(f"sc{p.scoop_radius:g}")
